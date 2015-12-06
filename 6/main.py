@@ -1,4 +1,6 @@
 import collections
+import cProfile
+import pstats
 import functools
 import unittest
 
@@ -315,16 +317,25 @@ class Grid(object):
     ]
 
   def TurnOn(self, startPoint, endPoint):
-    for point in Grid.GenPoints(startPoint, endPoint):
-        self.data[point.x][point.y] += 1
+    # Could use a generator to do doublely nested for loop iteration but doing it directly
+    # was about 4x faster.
+    for x in xrange(startPoint.x, endPoint.x + 1):
+      for y in xrange(startPoint.y, endPoint.y + 1):
+        self.data[x][y] += 1
 
   def TurnOff(self, startPoint, endPoint):
-    for point in Grid.GenPoints(startPoint, endPoint):
-        self.data[point.x][point.y] = max(self.data[point.x][point.y] - 1, 0)
+    for x in xrange(startPoint.x, endPoint.x + 1):
+      for y in xrange(startPoint.y, endPoint.y + 1):
+        # Slower
+        # self.data[x][y] = max(self.data[x][y] - 1, 0)
+        # Following is faster than above
+        if self.data[x][y] > 0:
+          self.data[x][y] -= 1
 
   def Toggle(self, startPoint, endPoint):
-    for point in Grid.GenPoints(startPoint, endPoint):
-        self.data[point.x][point.y] += 2
+    for x in xrange(startPoint.x, endPoint.x + 1):
+      for y in xrange(startPoint.y, endPoint.y + 1):
+        self.data[x][y] += 2
 
   def TotalBrightness(self):
     brightness = 0
@@ -333,12 +344,6 @@ class Grid(object):
         if self.data[row][col]:
             brightness += self.data[row][col]
     return brightness
-
-  @staticmethod
-  def GenPoints(startPoint, endPoint):
-    for x in xrange(startPoint.x, endPoint.x + 1):
-      for y in xrange(startPoint.y, endPoint.y + 1):
-        yield Point(x, y)
 
 
 class Interpreter(object):
@@ -378,10 +383,17 @@ class Interpreter(object):
     command(*args)
 
 # ------------- ANSWER
+pr = cProfile.Profile()
+pr.enable()
 grid = Grid(1000, 1000)
 interpreter = Interpreter(grid)
 interpreter.Eval(data.split("\n"))
 print grid.TotalBrightness()
+pr.disable()
+ps = pstats.Stats(pr).sort_stats("tottime")
+ps.print_stats()
+ps.print_callers()
+
 
 # ------------- TESTS
 
@@ -390,14 +402,6 @@ class GridTests(unittest.TestCase):
   def test_Construction(self):
     g = Grid(3, 2)
     self.assertEqual(g.data, [[0, 0, 0], [0, 0, 0]])
-
-  def test_GenPoints(self):
-    points = [point for point in Grid.GenPoints(Point(0, 0), Point(2, 2))]
-    self.assertEqual(points, [
-        Point(0, 0), Point(0, 1), Point(0, 2),
-        Point(1, 0), Point(1, 1), Point(1, 2),
-        Point(2, 0), Point(2, 1), Point(2, 2)
-    ])
 
   def test_Commands(self):
     g = Grid(4, 3)

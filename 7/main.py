@@ -1,3 +1,4 @@
+import abc
 import itertools
 import unittest
 
@@ -347,67 +348,76 @@ def MaybeDerefrence(arg, registers):
   else:
     return arg
 
+class ValueEmitter(object):
+  __metaclass__ = abc.ABCMeta
 
-class Wire(object):
-
-  def __init__(self, name, arg):
-    self.name = name
-    self.arg = arg
+  def __init__(self):
     self._cachedValue = None
 
   def GetBinaryValue(self, registers):
     if self._cachedValue is None:
-        self._cachedValue = MaybeDerefrence(self.arg, registers).GetBinaryValue(registers)
+        self._cachedValue = self.ComputeBinaryValue(registers)
     return self._cachedValue
+
+  @abc.abstractmethod
+  def ComputeBinaryValue(self, registers):
+    raise NotImplementedError("Must override ComputeBinaryValue")
 
   def GetValue(self, registers):
     return int(self.GetBinaryValue(registers), 2)
 
 
-class Signal(object):
+class Wire(ValueEmitter):
+
+  def __init__(self, name, arg):
+    super(Wire, self).__init__()
+    self.name = name
+    self.arg = arg
+
+  def ComputeBinaryValue(self, registers):
+    return MaybeDerefrence(self.arg, registers).GetBinaryValue(registers)
+
+
+class Signal(ValueEmitter):
 
     def __init__(self, value):
+        super(Signal, self).__init__()
         self.value = bin(value).split("b")[1]
         self.value = "".join("0" for _ in xrange(16 - len(self.value))) + self.value
 
-    def GetBinaryValue(self, registers):
+    def ComputeBinaryValue(self, registers):
         return self.value
 
-    def GetValue(self, registers):
-        return int(self.GetBinaryValue(registers), 2)
 
-class Gate(object):
+class Gate(ValueEmitter):
 
     def __init__(self, type, args):
+        super(Gate, self).__init__()
         self.type = type
         self.args = args
-        self._cachedValue = None
 
-    def GetBinaryValue(self, registers):
-        if self._cachedValue is None:
-            if self.type == "AND":
-                self._cachedValue = self._AND(
-                    MaybeDerefrence(self.args[0], registers).GetBinaryValue(registers),
-                    MaybeDerefrence(self.args[1], registers).GetBinaryValue(registers))
-            elif self.type == "OR":
-                self._cachedValue = self._OR(
-                    MaybeDerefrence(self.args[0], registers).GetBinaryValue(registers),
-                    MaybeDerefrence(self.args[1], registers).GetBinaryValue(registers))
-            elif self.type == "LSHIFT":
-                self._cachedValue = self._LSHIFT(
-                    MaybeDerefrence(self.args[0], registers).GetBinaryValue(registers),
-                    MaybeDerefrence(self.args[1], registers).GetValue(registers))
-            elif self.type == "RSHIFT":
-                self._cachedValue = self._RSHIFT(
-                    MaybeDerefrence(self.args[0], registers).GetBinaryValue(registers),
-                    MaybeDerefrence(self.args[1], registers).GetValue(registers))
-            elif self.type == "NOT":
-                self._cachedValue = self._NOT(
-                    MaybeDerefrence(self.args[0], registers).GetBinaryValue(registers))
-        return self._cachedValue
-
-    def GetValue(self, registers):
-        return int(self.GetBinaryValue(registers), 2)
+    def ComputeBinaryValue(self, registers):
+        if self.type == "AND":
+            return self._AND(
+                MaybeDerefrence(self.args[0], registers).GetBinaryValue(registers),
+                MaybeDerefrence(self.args[1], registers).GetBinaryValue(registers))
+        elif self.type == "OR":
+            return self._OR(
+                MaybeDerefrence(self.args[0], registers).GetBinaryValue(registers),
+                MaybeDerefrence(self.args[1], registers).GetBinaryValue(registers))
+        elif self.type == "LSHIFT":
+            return self._LSHIFT(
+                MaybeDerefrence(self.args[0], registers).GetBinaryValue(registers),
+                MaybeDerefrence(self.args[1], registers).GetValue(registers))
+        elif self.type == "RSHIFT":
+            return self._RSHIFT(
+                MaybeDerefrence(self.args[0], registers).GetBinaryValue(registers),
+                MaybeDerefrence(self.args[1], registers).GetValue(registers))
+        elif self.type == "NOT":
+            return self._NOT(
+                MaybeDerefrence(self.args[0], registers).GetBinaryValue(registers))
+        else:
+            raise ValueError("Invalid gate type: %s" % (self.type))
 
     def _AND(self, a, b):
         retVal = []
@@ -461,9 +471,11 @@ class Interpreter(object):
             self.wires[output] = Wire(output, self._parseArg(tokens[0]))
         elif len(tokens) == 2:
             self.wires[output] = Wire(output, Gate("NOT", [tokens[1]]))
-        else:   # len(tokens) == 3
+        elif len(tokens) == 3:
             self.wires[output] = Wire(output, Gate(tokens[1], (self._parseArg(tokens[0]),
                                                                self._parseArg(tokens[2]))))
+        else:
+            raise ValueError("Invalid line: %s" % line)
 
     def _parseArg(self, arg):
         if arg.isdigit():

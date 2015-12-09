@@ -355,13 +355,13 @@ class Wire(object):
     self.arg = arg
     self._cachedValue = None
 
-  def GetValue(self, registers):
+  def GetBinaryValue(self, registers):
     if self._cachedValue is None:
-        self._cachedValue = MaybeDerefrence(self.arg, registers).GetValue(registers)
+        self._cachedValue = MaybeDerefrence(self.arg, registers).GetBinaryValue(registers)
     return self._cachedValue
 
-  def GetIntValue(self, registers):
-    return int(self.GetValue(registers), 2)
+  def GetValue(self, registers):
+    return int(self.GetBinaryValue(registers), 2)
 
 
 class Signal(object):
@@ -370,11 +370,11 @@ class Signal(object):
         self.value = bin(value).split("b")[1]
         self.value = "".join("0" for _ in xrange(16 - len(self.value))) + self.value
 
-    def GetValue(self, registers):
+    def GetBinaryValue(self, registers):
         return self.value
 
-    def GetIntValue(self, registers):
-        return int(self.GetValue(registers), 2)
+    def GetValue(self, registers):
+        return int(self.GetBinaryValue(registers), 2)
 
 class Gate(object):
 
@@ -383,31 +383,31 @@ class Gate(object):
         self.args = args
         self._cachedValue = None
 
-    def GetValue(self, registers):
+    def GetBinaryValue(self, registers):
         if self._cachedValue is None:
             if self.type == "AND":
                 self._cachedValue = self._AND(
-                    MaybeDerefrence(self.args[0], registers).GetValue(registers),
-                    MaybeDerefrence(self.args[1], registers).GetValue(registers))
+                    MaybeDerefrence(self.args[0], registers).GetBinaryValue(registers),
+                    MaybeDerefrence(self.args[1], registers).GetBinaryValue(registers))
             elif self.type == "OR":
                 self._cachedValue = self._OR(
-                    MaybeDerefrence(self.args[0], registers).GetValue(registers),
-                    MaybeDerefrence(self.args[1], registers).GetValue(registers))
+                    MaybeDerefrence(self.args[0], registers).GetBinaryValue(registers),
+                    MaybeDerefrence(self.args[1], registers).GetBinaryValue(registers))
             elif self.type == "LSHIFT":
                 self._cachedValue = self._LSHIFT(
-                    MaybeDerefrence(self.args[0], registers).GetValue(registers),
-                    MaybeDerefrence(self.args[1], registers).GetIntValue(registers))
+                    MaybeDerefrence(self.args[0], registers).GetBinaryValue(registers),
+                    MaybeDerefrence(self.args[1], registers).GetValue(registers))
             elif self.type == "RSHIFT":
                 self._cachedValue = self._RSHIFT(
-                    MaybeDerefrence(self.args[0], registers).GetValue(registers),
-                    MaybeDerefrence(self.args[1], registers).GetIntValue(registers))
+                    MaybeDerefrence(self.args[0], registers).GetBinaryValue(registers),
+                    MaybeDerefrence(self.args[1], registers).GetValue(registers))
             elif self.type == "NOT":
                 self._cachedValue = self._NOT(
-                    MaybeDerefrence(self.args[0], registers).GetValue(registers))
+                    MaybeDerefrence(self.args[0], registers).GetBinaryValue(registers))
         return self._cachedValue
 
-    def GetIntValue(self, registers):
-        return int(self.GetValue(registers), 2)
+    def GetValue(self, registers):
+        return int(self.GetBinaryValue(registers), 2)
 
     def _AND(self, a, b):
         retVal = []
@@ -451,6 +451,9 @@ class Interpreter(object):
         for line in commands.split("\n"):
             self._parseAndEval(line)
 
+    def GetValue(self, wireName):
+        return self.wires[wireName].GetValue(self.wires)
+
     def _parseAndEval(self, line):
         expr, output = line.split(" -> ")
         tokens = expr.split()
@@ -472,7 +475,7 @@ class Interpreter(object):
 i = Interpreter()
 i.Eval(data)
 i.Eval("16076 -> b")
-print i.wires["a"].GetIntValue(i.wires)
+print i.GetValue("a")
 
 # TESTS ---------------------------------------
 
@@ -481,40 +484,40 @@ class ComponentTests(unittest.TestCase):
   def test_WireWithSignal(self):
     x = Wire("x", Signal(123))
     registers = {"x": x}
-    self.assertEqual(x.GetValue(registers), "0000000001111011")
-    self.assertEqual(x.GetIntValue(registers), 123)
+    self.assertEqual(x.GetBinaryValue(registers), "0000000001111011")
+    self.assertEqual(x.GetValue(registers), 123)
 
   def test_WireWithAnd(self):
     x = Wire("x", Signal(123))
     y = Wire("y", Signal(456))
     d = Wire("d", Gate("AND", ("x", "y")))
     registers = {"x": x, "y": y, "d":d}
-    self.assertEqual(d.GetIntValue(registers), 72)
+    self.assertEqual(d.GetValue(registers), 72)
 
   def test_WireWithOr(self):
     x = Wire("x", Signal(123))
     y = Wire("y", Signal(456))
     d = Wire("d", Gate("OR", ("x", "y")))
     registers = {"x": x, "y": y, "d":d}
-    self.assertEqual(d.GetIntValue(registers), 507)
+    self.assertEqual(d.GetValue(registers), 507)
 
   def test_WireWithLshift(self):
     x = Wire("x", Signal(123))
     d = Wire("d", Gate("LSHIFT", ("x", Signal(2))))
     registers = {"x": x, "d":d}
-    self.assertEqual(d.GetIntValue(registers), 492)
+    self.assertEqual(d.GetValue(registers), 492)
 
   def test_WireWithRshift(self):
     y = Wire("y", Signal(456))
     d = Wire("d", Gate("RSHIFT", ("y", Signal(2))))
     registers = {"y": y, "d":d}
-    self.assertEqual(d.GetIntValue(registers), 114)
+    self.assertEqual(d.GetValue(registers), 114)
 
   def test_WireWithNot(self):
     x = Wire("x", Signal(123))
     d = Wire("d", Gate("NOT", ["x"]))
     registers = {"x": x, "d":d}
-    self.assertEqual(d.GetIntValue(registers), 65412)
+    self.assertEqual(d.GetValue(registers), 65412)
 
 
 class InterpreterTests(unittest.TestCase):
@@ -530,14 +533,14 @@ NOT x -> h
 NOT y -> i"""
     i = Interpreter()
     i.Eval(data)
-    self.assertEqual(i.wires["d"].GetIntValue(i.wires), 72)
-    self.assertEqual(i.wires["e"].GetIntValue(i.wires), 507)
-    self.assertEqual(i.wires["f"].GetIntValue(i.wires), 492)
-    self.assertEqual(i.wires["g"].GetIntValue(i.wires), 114)
-    self.assertEqual(i.wires["h"].GetIntValue(i.wires), 65412)
-    self.assertEqual(i.wires["i"].GetIntValue(i.wires), 65079)
-    self.assertEqual(i.wires["x"].GetIntValue(i.wires), 123)
-    self.assertEqual(i.wires["y"].GetIntValue(i.wires), 456)
+    self.assertEqual(i.wires["d"].GetValue(i.wires), 72)
+    self.assertEqual(i.wires["e"].GetValue(i.wires), 507)
+    self.assertEqual(i.wires["f"].GetValue(i.wires), 492)
+    self.assertEqual(i.wires["g"].GetValue(i.wires), 114)
+    self.assertEqual(i.wires["h"].GetValue(i.wires), 65412)
+    self.assertEqual(i.wires["i"].GetValue(i.wires), 65079)
+    self.assertEqual(i.wires["x"].GetValue(i.wires), 123)
+    self.assertEqual(i.wires["y"].GetValue(i.wires), 456)
 
 
 if __name__ == "__main__":

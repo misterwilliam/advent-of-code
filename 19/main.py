@@ -1,4 +1,5 @@
 import collections
+import heapq
 import re
 import unittest
 
@@ -53,6 +54,42 @@ def bfs_search(seed, target, transformations):
       print "Progress", num_steps, len(todo)
       prev_num_steps = num_steps
 
+def a_star_reverse_search(seed, target, transformations):
+  todo = []
+  seen = set()
+  heapq.heappush(todo, (len(seed), seed, 0))
+  seen.add(seed)
+  prev_heuristic = len(seed)
+  while len(todo) > 0:
+    heuristic, current, num_steps = heapq.heappop(todo)
+    for transformation in transformations:
+      for output in transformation.reverse(current):
+        if output == target:
+          return num_steps + 1
+        if output not in seen:
+          seen.add(output)
+          heapq.heappush(todo, (len(output), output, num_steps + 1))
+    if heuristic != prev_heuristic:
+      print "Progress", heuristic
+      prev_heuristic = heuristic
+
+def greedy_reverse_search(seed, target, transformations):
+  current = seed
+  num_steps = 0
+  while current != target:
+    did_step = False
+    for transformation in transformations:
+      candidates = [candidate for candidate in transformation.reverse(current)]
+      if candidates:
+        current = candidates[0]
+        num_steps += 1
+        did_step = True
+        break
+    print num_steps, current
+    if not did_step:
+      print num_steps, current
+      break
+  return num_steps
 
 # ANSWER ------------------
 data = """Al => ThF
@@ -103,24 +140,7 @@ transformations = []
 for line in data.split("\n"):
   transformations.append(Transformation.load_from_string(line))
 transformations.sort(key=lambda x: len(x.output), reverse=True)
-
-current = target
-num_steps = 0
-while current != "e":
-  did_step = False
-  for transformation in transformations:
-    candidates = [candidate for candidate in transformation.reverse(current)]
-    if candidates:
-      current = candidates[0]
-      num_steps += 1
-      did_step = True
-      break
-  print num_steps, current
-  if not did_step:
-    print num_steps, current
-    break
-print num_steps
-#print bfs_search("e", target, transformations)
+print a_star_reverse_search(target, "e", transformations)
 
 
 # TESTS -------------------

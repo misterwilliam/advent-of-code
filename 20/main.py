@@ -23,24 +23,43 @@ def calc_num_presents(house_number):
 
 def calc_num_presents_finite_visits(house_number, houses_per_elf, presents_per_elf):
   num_presents = 0
-  divisors = set(reduce(list.__add__,
-                 ([i, house_number//i] for i in range(1,
-                            int(house_number**0.5) + 1) if house_number % i == 0)))
-  #for elf in get_divisors(house_number):
-  for elf in divisors:
+  # I should be able to beat one_line_divisor with get_divisor but I can't figure out how.
+  for elf in one_line_divisors(house_number):
     if house_number / elf <= houses_per_elf:
       num_presents += presents_per_elf * elf
   return num_presents
 
-@memeoize
+def one_line_divisors(house_number):
+  return set(
+    reduce(list.__add__,
+           ([i, house_number//i]
+            for i in range(1, int(house_number**0.5) + 1)
+            if house_number % i == 0)))
+
+# @memeoize
+# def get_divisors(num):
+#   i = 2
+#   while i < (num / 2) + 1:
+#     if num % i == 0:
+#       divisors = get_divisors(num / i)
+#       return set([1, i, num / i, num]) | divisors | set([divisor * i for divisor in divisors])
+#     i += 1
+#   return set([1, num])
+
 def get_divisors(num):
+  return set([1, num]) | get_factors(num)
+
+@memeoize
+def get_factors(num):
+  if num < 1000000:
+    return one_line_divisors(num)
   i = 2
   while i < (num / 2) + 1:
     if num % i == 0:
-      divisors = get_divisors(num / i)
-      return set([1, i, num / i, num]) | divisors | set([divisor * i for divisor in divisors])
+      divisors = get_factors(num / i)
+      return set([i, num / i]) | divisors | set([divisor * i for divisor in divisors])
     i += 1
-  return set([1, num])
+  return set()
 
 def exponential_search(func, threshold):
   known_min = 1
@@ -99,26 +118,30 @@ class Timer(object):
     self.secs = self.end - self.start
     print
 
-target = 100000000000000000000
+target = 200000000
 with Timer() as t:
   get_divisors(target)
 print 'get_divisors elapsed time: %f secs' % t.secs
 
 with Timer() as t:
+  one_line_divisors(target)
+print 'one_line_divisors elapsed time: %f secs' % t.secs
+
+with Timer() as t:
   calc_num_presents_finite_visits(100000, 50, 11)
 print 'calc_num_presents_finite_visits_fixed elapsed time: %f secs' % t.secs
 
-target = 1000000
-pr = cProfile.Profile()
-pr.enable()
+target = 500000
+# pr = cProfile.Profile()
+# pr.enable()
 with Timer() as t:
   brute_force_search(lambda house_number: calc_num_presents_finite_visits(house_number,
         50, 11), target, verbose=False)
 print 'brute_force_search(calc_num_presents_finite_visits_fixed elapsed time: %f secs' % t.secs
 
-sortby = 'tottime'
-ps = pstats.Stats(pr).sort_stats(sortby)
-ps.print_stats()
+# sortby = 'tottime'
+# ps = pstats.Stats(pr).sort_stats(sortby)
+# ps.print_stats()
 
 # TESTS ----------------------------
 
@@ -135,6 +158,10 @@ class MyTests(unittest.TestCase):
   def test_get_divisors(self):
     self.assertEqual(set([1, 2, 3, 4, 6, 12]), get_divisors(12))
     self.assertEqual(set([1, 2]), get_divisors(2))
+
+  def test_get_factors(self):
+    self.assertEqual(set([2, 3, 4, 6]), get_factors(12))
+    self.assertEqual(set([]), get_factors(2))
 
   def test_calc_num_presents(self):
     self.assertEqual(10, calc_num_presents_finite_visits(1, 10, 10))

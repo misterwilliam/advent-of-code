@@ -1,3 +1,5 @@
+import cProfile
+import pstats
 import time
 import unittest
 
@@ -21,19 +23,13 @@ def calc_num_presents(house_number):
 
 def calc_num_presents_finite_visits(house_number, houses_per_elf, presents_per_elf):
   num_presents = 0
-  for elf in get_divisors(house_number):
-    if house_number / elf <= houses_per_elf:
-      num_presents += presents_per_elf * elf
-  return num_presents
-
-def calc_num_presents_finite_visits_fixed(house_number):
-  num_presents = 0
   divisors = set(reduce(list.__add__,
-                    ([i, house_number//i] for i in range(1, int(house_number**0.5) + 1) if house_number % i == 0)))
+                 ([i, house_number//i] for i in range(1,
+                            int(house_number**0.5) + 1) if house_number % i == 0)))
   #for elf in get_divisors(house_number):
   for elf in divisors:
-    if house_number / elf <= 50:
-      num_presents += 11 * elf
+    if house_number / elf <= houses_per_elf:
+      num_presents += presents_per_elf * elf
   return num_presents
 
 @memeoize
@@ -72,7 +68,7 @@ def exponential_search(func, threshold):
     if known_max - known_min == 1:
       return known_max
 
-def brute_force_search(func, threshold):
+def brute_force_search(func, threshold, verbose=True):
   i = 1
   max_value = 1
   while True:
@@ -80,25 +76,10 @@ def brute_force_search(func, threshold):
     max_value = max(max_value, value)
     if value >= threshold:
       return i
-    if i % 10000 == 0:
-      print i, max_value
+    if verbose:
+      if i % 10000 == 0:
+        print i, max_value
     i += 1
-
-def list_backed_calc_num_presents(max_house_number, threshold):
-  houses = [0 for _ in xrange(max_house_number)]
-  print "Initialized array"
-  for i in xrange(0, max_house_number):
-    j = i
-    if i % 1000:
-      print i
-    while j < len(houses):
-      houses[j] += i * 10
-      j += i
-  for i, house in enumerate(houses):
-    if house > threshold:
-      return i
-
-
 
 # ANSWER ---------------------------
 # print brute_force_search(lambda house_number: calc_num_presents_finite_visits(house_number,
@@ -106,18 +87,6 @@ def list_backed_calc_num_presents(max_house_number, threshold):
 
 #print brute_force_search(get_presents, 29000000)
 #print brute_force_search(calc_num_presents_finite_visits_fixed, 29000000)
-
-# i = 1
-# while True:
-#     v = get_presents(i)
-#     if v > 29000000:
-#         print "House", i, "got", v, "presents."
-#         break
-#     if i % 1000 == 0:
-#       print i
-#     i += 1
-# print calc_num_presents(1124352)
-# print calc_num_presents(1124351)
 
 # BENCHMARK ------------------------
 class Timer(object):
@@ -136,16 +105,20 @@ with Timer() as t:
 print 'get_divisors elapsed time: %f secs' % t.secs
 
 with Timer() as t:
-  calc_num_presents_finite_visits_fixed(100000)
+  calc_num_presents_finite_visits(100000, 50, 11)
 print 'calc_num_presents_finite_visits_fixed elapsed time: %f secs' % t.secs
 
+target = 1000000
+pr = cProfile.Profile()
+pr.enable()
 with Timer() as t:
-  brute_force_search(calc_num_presents_finite_visits_fixed, 29000)
+  brute_force_search(lambda house_number: calc_num_presents_finite_visits(house_number,
+        50, 11), target, verbose=False)
 print 'brute_force_search(calc_num_presents_finite_visits_fixed elapsed time: %f secs' % t.secs
 
-# with Timer() as t:
-#   get_factors(target)
-# print 'elapsed time: %f secs' % t.secs
+sortby = 'tottime'
+ps = pstats.Stats(pr).sort_stats(sortby)
+ps.print_stats()
 
 # TESTS ----------------------------
 
